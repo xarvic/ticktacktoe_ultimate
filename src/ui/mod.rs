@@ -2,7 +2,7 @@ use druid::{Widget, Lens, WidgetExt, UnitPoint, Color, RenderContext};
 use crate::data::{GameData, FieldMeta};
 use crate::ui::field::{FieldWidget, draw_mark};
 use druid::lens::Map;
-use druid::widget::{Flex, Painter, Label, Button};
+use druid::widget::{Flex, Painter, Label};
 use druid::piet::{Text, TextLayoutBuilder};
 
 mod field;
@@ -31,7 +31,7 @@ pub fn main_ui() -> impl Widget<GameData> {
             draw_mark(ctx, ctx.size().to_rect().inset(-4.0), 4.0, 1.0, mark);
 
         }).fix_size(30.0, 30.0))
-        .with_child(Label::dynamic(|a: &GameData, b|{
+        .with_child(Label::dynamic(|a: &GameData, _|{
             if a.game.finished().is_some() {
                 String::from("won the Game!")
             } else {
@@ -53,7 +53,7 @@ pub fn main_ui() -> impl Widget<GameData> {
         .with_child(row(2))
         .with_spacer(40.0)
         .with_child(
-            Painter::new(move|ctx, data: &GameData, env|{
+            Painter::new(move|ctx, _data: &GameData, env|{
 
                     if text.is_none() {
                         text = Some(

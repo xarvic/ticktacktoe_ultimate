@@ -1,6 +1,6 @@
 use druid::{WindowDesc, AppLauncher};
 use crate::ui::main_ui;
-use crate::data::{GameData, Grid, Mark};
+use crate::data::GameData;
 
 mod data;
 mod ui;
