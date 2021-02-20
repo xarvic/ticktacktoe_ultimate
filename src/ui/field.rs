@@ -104,7 +104,7 @@ impl Widget<FieldMeta> for FieldWidget {
 
     fn layout(&mut self, ctx: &mut LayoutCtx, bc: &BoxConstraints, _data: &FieldMeta, _env: &Env) -> Size {
         ctx.set_paint_insets(20.0);
-        bc.constrain_aspect_ratio(1.0, 120.0)
+        bc.constrain_aspect_ratio(1.0, 250.0)
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, data: &FieldMeta, env: &Env) {
@@ -155,11 +155,10 @@ impl Widget<FieldMeta> for FieldWidget {
 
             ctx.fill(shape, &brush);
 
-            let line_width = line_width * 12.0;
-
             let bounds = ctx.size().to_rect().inset(-line_width);
+            let line_width = bounds.width() / 10.0;
 
-            draw_mark(ctx, bounds, line_width, 1.0, mark);
+            draw_mark(ctx, bounds.inset(-line_width), line_width, 1.0, mark);
         }
     }
 }

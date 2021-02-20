@@ -7,8 +7,8 @@ mod ui;
 
 fn main() {
     let window = WindowDesc::new(main_ui)
-        .window_size((560.0, 660.0))
-        .resizable(false)
+        .with_min_size((560.0, 680.0))
+        .resizable(true)
         .title("Tick Tack Toe Ultimate");
 
     AppLauncher::with_window(window)

@@ -1,8 +1,8 @@
-use druid::{Widget, Lens, WidgetExt, UnitPoint, Color, RenderContext};
+use druid::{Widget, Lens, WidgetExt, Color, RenderContext};
 use crate::data::{GameData, FieldMeta};
 use crate::ui::field::{FieldWidget, draw_mark};
 use druid::lens::Map;
-use druid::widget::{Flex, Painter, Label};
+use druid::widget::{Flex, Painter, Label, CrossAxisAlignment, MainAxisAlignment};
 use druid::piet::{Text, TextLayoutBuilder};
 
 mod field;
@@ -17,11 +17,13 @@ fn position_lens(x: usize, y: usize) -> impl Lens<GameData, FieldMeta> {
 
 pub fn row(y: usize) -> impl Widget<GameData> {
     Flex::row()
-        .with_child(FieldWidget::new().lens(position_lens(0, y)))
+        .main_axis_alignment(MainAxisAlignment::Center)
+        .must_fill_main_axis(true)
+        .with_flex_child(FieldWidget::new().lens(position_lens(0, y)), 1.0)
         .with_spacer(60.0)
-        .with_child(FieldWidget::new().lens(position_lens(1, y)))
+        .with_flex_child(FieldWidget::new().lens(position_lens(1, y)), 1.0)
         .with_spacer(60.0)
-        .with_child(FieldWidget::new().lens(position_lens(2, y)))
+        .with_flex_child(FieldWidget::new().lens(position_lens(2, y)), 1.0)
 }
 
 pub fn main_ui() -> impl Widget<GameData> {
@@ -37,20 +39,20 @@ pub fn main_ui() -> impl Widget<GameData> {
             } else {
                 String::from("'s turn")
             }
-        }).with_text_size(20.0))
-        .align_horizontal(UnitPoint::CENTER);
+        }).with_text_size(20.0));
 
     let mut text = None;
 
     Flex::column()
+        .cross_axis_alignment(CrossAxisAlignment::Center)
         .with_spacer(20.0)
         .with_child(header)
         .with_spacer(30.0)
-        .with_child(row(0))
+        .with_flex_child(row(0), 1.0)
         .with_spacer(60.0)
-        .with_child(row(1))
+        .with_flex_child(row(1), 1.0)
         .with_spacer(60.0)
-        .with_child(row(2))
+        .with_flex_child(row(2), 1.0)
         .with_spacer(40.0)
         .with_child(
             Painter::new(move|ctx, _data: &GameData, env|{
@@ -86,7 +88,6 @@ pub fn main_ui() -> impl Widget<GameData> {
                 })
                 .fix_size(80.0, 35.0)
                 .on_click(|_, data: &mut GameData, _|*data = GameData::new())
-        )
+        ).with_spacer(10.0)
         .padding((40.0, 0.0))
-        .align_horizontal(UnitPoint::TOP)
 }
