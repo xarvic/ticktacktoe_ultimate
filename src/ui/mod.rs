@@ -1,11 +1,20 @@
-use druid::{Widget, Lens, WidgetExt, Color, RenderContext};
+use druid::{Widget, Lens, WidgetExt, Color, RenderContext, Data, UpdateCtx, Env};
 use crate::data::{GameData, FieldMeta, Slot};
 use crate::ui::field::{FieldWidget, draw_mark};
 use druid::lens::Map;
-use druid::widget::{Flex, Painter, Label, CrossAxisAlignment, MainAxisAlignment};
-use druid::piet::{Text, TextLayoutBuilder};
+use druid::widget::{Flex, Painter, Label, CrossAxisAlignment, MainAxisAlignment, Controller};
+use druid::piet::{Text, TextLayoutBuilder, TextLayout};
 
 mod field;
+
+struct Client;
+
+impl<W: Widget<GameData>> Controller<GameData, W> for Client {
+    fn update(&mut self, child: &mut W, ctx: &mut UpdateCtx, old_data: &GameData, data: &GameData, env: &Env) {
+        child.update(ctx, old_data, data, env);
+        data.handle_opponent(ctx.get_external_handle());
+    }
+}
 
 fn position_lens(x: usize, y: usize) -> impl Lens<GameData, FieldMeta> {
     let position = (x, y);
@@ -41,7 +50,18 @@ pub fn main_ui() -> impl Widget<GameData> {
             }
         }).with_text_size(20.0));
 
-    let mut text = None;
+    let footer = Flex::row()
+        .with_child(
+            colored_button(Color::GREEN, "AI Easy", |data: &mut GameData|*data = GameData::ai(1))
+        )
+        .with_spacer(10.0)
+        .with_child(
+            colored_button(Color::GREEN, "AI Hard", |data: &mut GameData|*data = GameData::ai(3))
+        )
+        .with_spacer(10.0)
+        .with_child(
+            colored_button(Color::GREEN, "2 Players", |data: &mut GameData|*data = GameData::local())
+        );
 
     Flex::column()
         .cross_axis_alignment(CrossAxisAlignment::Center)
@@ -54,40 +74,47 @@ pub fn main_ui() -> impl Widget<GameData> {
         .with_spacer(60.0)
         .with_flex_child(row(2), 1.0)
         .with_spacer(40.0)
-        .with_child(
-            Painter::new(move|ctx, _data: &GameData, env|{
-
-                    if text.is_none() {
-                        text = Some(
-                            ctx.text()
-                                .new_text_layout("Reset")
-                                .text_color(env.get(druid::theme::FOREGROUND_LIGHT))
-                                .font(env.get(druid::theme::UI_FONT_BOLD).family, 20.0)
-                                .build()
-                                .unwrap()
-                        );
-                    }
-
-                    let brush = if ctx.is_active() {
-                        Color::GREEN.with_alpha(0.4)
-                    } else if ctx.is_hot() {
-                        Color::GREEN.with_alpha(0.8)
-                    } else {
-                        Color::GREEN.with_alpha(0.6)
-                    };
-                    let brush = ctx.solid_brush(brush);
-
-                    let mut shape = ctx.size().to_rect();
-
-                    if ctx.is_active() {
-                        shape = shape.inset(-2.0);
-                    }
-                    ctx.fill(shape.to_rounded_rect(5.0), &brush);
-
-                    ctx.draw_text(text.as_ref().unwrap(), (12.0, 3.0));
-                })
-                .fix_size(80.0, 35.0)
-                .on_click(|_, data: &mut GameData, _|*data = GameData::new())
-        ).with_spacer(10.0)
+        .with_child(footer)
+        .with_spacer(10.0)
         .padding((40.0, 0.0))
+        .controller(Client)
+}
+
+fn colored_button<T: Data>(color: Color, string: &'static str, f: impl Fn(&mut T) + 'static) -> impl Widget<T> {
+    let mut text = None;
+
+
+    Painter::new(move|ctx, _data: &T, env|{
+
+        if text.is_none() {
+            text = Some(
+            ctx.text()
+            .new_text_layout(string)
+            .text_color(env.get(druid::theme::FOREGROUND_LIGHT))
+            .font(env.get(druid::theme::UI_FONT_BOLD).family, 20.0)
+            .build()
+            .unwrap()
+            );
+        }
+
+        let brush = if ctx.is_active() {
+            color.clone().with_alpha(0.4)
+        } else if ctx.is_hot() {
+            color.clone().with_alpha(0.8)
+        } else {
+            color.clone().with_alpha(0.6)
+        };
+        let brush = ctx.solid_brush(brush);
+
+        let mut shape = ctx.size().to_rect();
+
+        if ctx.is_active() {
+        shape = shape.inset(-2.0);
+        }
+        ctx.fill(shape.to_rounded_rect(5.0), &brush);
+
+        ctx.draw_text(text.as_ref().unwrap(), ((90.0 - text.as_ref().unwrap().size().width) / 2.0, 3.0));
+    })
+    .fix_size(90.0, 35.0)
+    .on_click(move |_, data: &mut T, _|f(data))
 }

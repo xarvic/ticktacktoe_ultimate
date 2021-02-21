@@ -1,11 +1,21 @@
-use druid::{Data, Lens};
+use druid::{Data, Lens, ExtEventSink};
 use std::ops::{Index, Deref};
-use std::sync::Arc;
+use crate::data::Mark::{Cross, Circle};
+use crate::ai::best_move;
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Data)]
 pub enum Mark {
     Cross,
     Circle,
+}
+
+impl Mark {
+    pub fn other(&self) -> Mark {
+        match self {
+            Mark::Cross => Circle,
+            Mark::Circle => Cross,
+        }
+    }
 }
 
 impl Slot for Option<Mark> {
@@ -30,14 +40,45 @@ pub trait Slot {
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Data)]
 pub struct Grid<S: Slot + Clone + Eq> {
-    slots: [[S; 3]; 3],
+    slots: [S; 9],
     finished: Option<Mark>,
     has_free: bool,
 }
 
-type Field = Grid<Option<Mark>>;
+pub type Field = Grid<Option<Mark>>;
 
-type LargeField = Grid<Field>;
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Data)]
+pub struct FieldPosition(usize);
+
+impl From<(usize, usize)> for FieldPosition {
+    fn from(pos: (usize, usize)) -> Self {
+        let val = pos.0 + pos.1 * 3;
+
+        assert!(val < 9);
+
+        Self(val)
+    }
+}
+
+impl FieldPosition {
+    fn index(self) -> usize {
+        self.0
+    }
+    pub fn x(self) -> usize {
+        self.0 % 3
+    }
+    pub fn y(self) -> usize {
+        self.0 / 3
+    }
+    pub fn all() -> impl Iterator<Item=FieldPosition> + Clone {
+        (0..9).map(|x|Self(x))
+    }
+}
+
+pub type LargeField = Grid<Field>;
+
+#[derive(Copy, Clone, Eq, PartialEq)]
+struct LargeFieldPosition(usize);
 
 impl<S: Slot + Eq + Clone> Grid<S> {
     fn row_finished(&self, row: usize) -> Option<Mark> {
@@ -72,12 +113,12 @@ impl<S: Slot + Eq + Clone> Grid<S> {
             .or(self.column_finished(1))
             .or(self.column_finished(2));
         self.finished = finished;
-        let has_free = self.slots.iter().flat_map(|x|x).any(|slot|slot.has_free());
+        let has_free = self.slots.iter().any(|slot|slot.has_free());
         self.has_free = has_free;
     }
 
-    pub fn set(&mut self, x: usize, y: usize, mark: S) {
-        self.slots[x][y] = mark;
+    pub fn set(&mut self, pos: impl Into<FieldPosition>, mark: S) {
+        self.slots[pos.into().index()] = mark;
         self.calc_finished();
     }
 }
@@ -92,20 +133,23 @@ impl<S: Slot + Clone + Eq> Slot for Grid<S> {
     }
 
     fn empty() -> Self {
-        let row = [S::empty(), S::empty(), S::empty()];
         Grid {
-            slots: [row.clone(), row.clone(), row.clone()],
+            slots: [
+                S::empty(), S::empty(), S::empty(),
+                S::empty(), S::empty(), S::empty(),
+                S::empty(), S::empty(), S::empty(),
+            ],
             finished: None,
             has_free: true,
         }
     }
 }
 
-impl<S: Slot + Clone + Eq> Index<(usize, usize)> for Grid<S> {
+impl<S: Slot + Clone + Eq, P: Into<FieldPosition>> Index<P> for Grid<S> {
     type Output = S;
 
-    fn index(&self, index: (usize, usize)) -> &Self::Output {
-        &self.slots[index.0][index.1]
+    fn index(&self, index: P) -> &Self::Output {
+        &self.slots[index.into().index()]
     }
 }
 
@@ -113,33 +157,30 @@ impl<S: Slot + Clone + Eq> Index<(usize, usize)> for Grid<S> {
 pub struct FieldMeta {
     field: Field,
     next_turn: Mark,
-    written: Option<(usize, usize)>,
+    written: Option<FieldPosition>,
     active: bool,
 }
 
 impl FieldMeta {
-    pub fn from_data(game_data: &GameData, position: (usize, usize)) -> Self {
+    pub fn from_data(game_data: &GameData, position: impl Into<FieldPosition> + Clone) -> Self {
         FieldMeta {
-            field: game_data.game[position].clone(),
+            field: game_data.game[position.clone()].clone(),
             next_turn: game_data.next_turn,
-            active: (game_data.next_field == Some(position) || game_data.next_field == None) &&
-                game_data.game[position].has_free() &&
-                game_data.game.belongs_to().is_none(),
+            active: (game_data.next_field == Some(position.clone().into()) || game_data.next_field == None) &&
+                game_data.game[position.into()].has_free() &&
+                game_data.game.belongs_to().is_none() &&
+                game_data.my_turn(),
             written: None,
         }
     }
-    pub fn write_back(mut self, game_data: &mut GameData, field_position: (usize, usize)) {
-        if let Some((x, y)) = self.written {
-            self.field.set(x, y, Some(self.next_turn));
-            game_data.game.set(field_position.0, field_position.1, self.field);
+    pub fn write_back(mut self, game_data: &mut GameData, field_position: impl Into<FieldPosition>) {
+        if let Some(position) = self.written {
+            self.field.set(position, Some(self.next_turn));
+            game_data.game.set(field_position, self.field);
 
-            game_data.next_turn = if self.next_turn == Mark::Cross {
-                Mark::Circle
-            } else {
-                Mark::Cross
-            };
-            game_data.next_field = if game_data.game[(x, y)].has_free() {
-                Some((x, y))
+            game_data.next_turn = game_data.next_turn.other();
+            game_data.next_field = if game_data.game[position].has_free() {
+                Some(position)
             } else {
                 None
             };
@@ -148,9 +189,9 @@ impl FieldMeta {
     pub fn is_active(&self) -> bool {
         self.active
     }
-    pub fn set(&mut self, position: (usize, usize)) {
+    pub fn set(&mut self, position: impl Into<FieldPosition>) {
         if self.active {
-        self.written = Some(position);
+        self.written = Some(position.into());
         }
     }
     pub fn next_turn(&self) -> Mark {
@@ -166,19 +207,47 @@ impl Deref for FieldMeta {
     }
 }
 
+#[derive(Copy, Clone, Data)]
+pub enum Opponent {
+    Ai {level: u64},
+}
+
 #[derive(Clone, Data, Lens)]
 pub struct GameData {
     pub game: LargeField,
     pub next_turn: Mark,
-    pub next_field: Option<(usize, usize)>,
+    pub next_field: Option<FieldPosition>,
+    pub opponent: Option<(Opponent, Mark)>,
 }
 
 impl GameData {
-    pub fn new() -> Self {
+    pub fn local() -> Self {
         Self {
             game: LargeField::empty(),
             next_turn: Mark::Cross,
             next_field: None,
+            opponent: None,
         }
+    }
+
+    pub fn ai(level: u64) -> Self {
+        Self {
+            game: LargeField::empty(),
+            next_turn: Mark::Cross,
+            next_field: None,
+            opponent: Some((Opponent::Ai {level}, Mark::Circle)),
+        }
+    }
+
+    pub fn handle_opponent(&self, sink: ExtEventSink) {
+        if let Some((Opponent::Ai {level}, mark)) = self.opponent.as_ref() {
+            if *mark == self.next_turn {
+                best_move(self.game.clone(), *mark, self.next_field, *level, sink);
+            }
+        }
+    }
+
+    pub fn my_turn(&self) -> bool {
+        self.opponent.as_ref().map(|op|op.1) != Some(self.next_turn)
     }
 }
