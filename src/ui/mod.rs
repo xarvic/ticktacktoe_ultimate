@@ -1,5 +1,5 @@
 use druid::{Widget, Lens, WidgetExt, Color, RenderContext};
-use crate::data::{GameData, FieldMeta};
+use crate::data::{GameData, FieldMeta, Slot};
 use crate::ui::field::{FieldWidget, draw_mark};
 use druid::lens::Map;
 use druid::widget::{Flex, Painter, Label, CrossAxisAlignment, MainAxisAlignment};
@@ -29,12 +29,12 @@ pub fn row(y: usize) -> impl Widget<GameData> {
 pub fn main_ui() -> impl Widget<GameData> {
     let header = Flex::row()
         .with_child(Painter::new(|ctx, data: &GameData, _|{
-            let mark = data.game.finished().unwrap_or(data.next_turn);
+            let mark = data.game.belongs_to().unwrap_or(data.next_turn);
             draw_mark(ctx, ctx.size().to_rect().inset(-4.0), 4.0, 1.0, mark);
 
         }).fix_size(30.0, 30.0))
         .with_child(Label::dynamic(|a: &GameData, _|{
-            if a.game.finished().is_some() {
+            if a.game.belongs_to().is_some() {
                 String::from("won the Game!")
             } else {
                 String::from("'s turn")

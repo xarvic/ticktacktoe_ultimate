@@ -1,4 +1,4 @@
-use crate::data::{Mark, FieldMeta};
+use crate::data::{Mark, FieldMeta, Slot};
 use druid::{Widget, LifeCycle, EventCtx, PaintCtx, LifeCycleCtx, BoxConstraints, Size, LayoutCtx, Event, Env, UpdateCtx, RenderContext, Color, Rect};
 use druid::piet::{StrokeStyle, LineCap};
 use druid::kurbo::Line;
@@ -99,7 +99,7 @@ impl Widget<FieldMeta> for FieldWidget {
 
     fn update(&mut self, ctx: &mut UpdateCtx, _: &FieldMeta, data: &FieldMeta, _: &Env) {
         ctx.request_paint();
-        self.won = data.finished();
+        self.won = data.belongs_to();
     }
 
     fn layout(&mut self, ctx: &mut LayoutCtx, bc: &BoxConstraints, _data: &FieldMeta, _env: &Env) -> Size {
