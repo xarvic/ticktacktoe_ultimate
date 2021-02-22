@@ -53,7 +53,7 @@ pub fn best_move(field: LargeField, mark: Mark, next_field: Option<FieldPosition
 }
 
 fn calc_move(field: LargeField, mark: Mark, next_field: Option<FieldPosition>, steps: u64) -> (FieldPosition, FieldPosition, Metrik) {
-        FieldPosition::all()
+        let iter = FieldPosition::all()
             .filter(|&pos|{
                 next_field.is_none() || next_field == Some(pos)
             })
@@ -77,7 +77,12 @@ fn calc_move(field: LargeField, mark: Mark, next_field: Option<FieldPosition>, s
                     game_state(field, mark)
                 };
                 (outer, inner, r)
-            })
-            .max_by(|v0, v1|v0.2.comp(&v1.2))
+            });
+    if steps % 2 == 0 {
+        iter.max_by(|v0, v1| v0.2.comp(&v1.2))
             .unwrap()
+    } else {
+        iter.min_by(|v0, v1| v0.2.comp(&v1.2))
+            .unwrap()
+    }
 }
