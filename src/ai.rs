@@ -7,22 +7,39 @@ use druid::{ExtEventSink, Selector, Target};
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 struct Metrik {
+    won: Option<bool>,
+    relation: isize,
 }
 
 impl Metrik {
     pub fn comp(&self, other: &Self) -> Ordering {
-        Ordering::Equal
+        if self.won == None && other.won == None {
+            self.relation.cmp(&other.relation)
+        } else {
+            if let (Some(true), _) | (None, Some(false)) = (self.won, other.won) {
+                Ordering::Greater
+            } else {
+                Ordering::Less
+            }
+        }
     }
 }
 
-fn game_state(_field: LargeField, _mark: Mark) -> Metrik {
-    Metrik {}
+fn game_state(field: LargeField, mark: Mark) -> Metrik {
+    let relation = FieldPosition::all()
+        .map(|pos|field[pos].belongs_to().map(|m|m==mark))
+        .filter_map(|x|x)
+        .fold(0, |state, x|if x {state + 1} else {state - 1});
+
+    Metrik {
+        won: field.belongs_to().map(|m|m==mark),
+        relation,
+    }
 }
 
 pub static MAKE_MOVE: Selector<(FieldPosition, FieldPosition)> = Selector::new("de.ticktacktoe_ultimate.make_move");
 
 pub fn best_move(field: LargeField, mark: Mark, next_field: Option<FieldPosition>, ahead: u64, sink: ExtEventSink) {
-    println!("make move!");
     spawn(move ||{
         let start = Instant::now();
 
@@ -31,8 +48,7 @@ pub fn best_move(field: LargeField, mark: Mark, next_field: Option<FieldPosition
         if let Some(duration) = Duration::from_millis(800).checked_sub(start.elapsed()) {
             sleep(duration);
         }
-        sink.submit_command(MAKE_MOVE, (ret.0, ret.1), Target::Global);
-        println!("finished!");
+        sink.submit_command(MAKE_MOVE, (ret.0, ret.1), Target::Global).unwrap();
     });
 }
 
@@ -56,7 +72,7 @@ fn calc_move(field: LargeField, mark: Mark, next_field: Option<FieldPosition>, s
                 };
 
                 let r = if steps > 0 && field.has_free() {
-                    calc_move(new_field, mark.other(), next_field, steps - 1).2
+                    calc_move(new_field, mark.other(), next_pos, steps - 1).2
                 } else {
                     game_state(field, mark)
                 };
