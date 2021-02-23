@@ -56,7 +56,7 @@ pub fn main_ui() -> impl Widget<GameData> {
         )
         .with_spacer(10.0)
         .with_child(
-            colored_button(Color::GREEN, "AI Hard", |data: &mut GameData|*data = GameData::ai(3))
+            colored_button(Color::GREEN, "AI Hard", |data: &mut GameData|*data = GameData::ai(2))
         )
         .with_spacer(10.0)
         .with_child(

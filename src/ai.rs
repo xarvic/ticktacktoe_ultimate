@@ -4,37 +4,36 @@ use std::cmp::Ordering;
 use std::time::{Instant, Duration};
 use std::thread::{sleep, spawn};
 use druid::{ExtEventSink, Selector, Target};
+use std::f32::{INFINITY, NEG_INFINITY};
 
-#[derive(Copy, Clone, Eq, PartialEq)]
-struct Metrik {
-    won: Option<bool>,
-    relation: isize,
-}
-
-impl Metrik {
-    pub fn comp(&self, other: &Self) -> Ordering {
-        if self.won == None && other.won == None {
-            self.relation.cmp(&other.relation)
-        } else {
-            if let (Some(true), _) | (None, Some(false)) = (self.won, other.won) {
-                Ordering::Greater
-            } else {
-                Ordering::Less
-            }
-        }
-    }
-}
-
-fn game_state(field: LargeField, mark: Mark) -> Metrik {
-    let relation = FieldPosition::all()
+fn game_state(field: LargeField, mark: Mark) -> f32 {
+    let won_field = FieldPosition::all()
         .map(|pos|field[pos].belongs_to().map(|m|m==mark))
         .filter_map(|x|x)
-        .fold(0, |state, x|if x {state + 1} else {state - 1});
+        .fold(0.0, |state, x|if x {state + 1.0} else {state - 1.0});
 
-    Metrik {
-        won: field.belongs_to().map(|m|m==mark),
-        relation,
-    }
+    let tactic_position: f32 = FieldPosition::all()
+        .filter(|&pos|{
+            field[pos].has_free()
+        })
+        .cartesian_product(FieldPosition::all())
+        .filter(|(outer, inner)|field[*outer][*inner].has_free())
+        .map(|(outer, inner_pos)|{
+            let mut inner = field[outer];
+            inner.set(inner_pos, Some(mark));
+            let x = if inner.belongs_to().is_some() {1.0} else {0.0};
+            inner.set(inner_pos, Some(mark.other()));
+            x + if inner.belongs_to().is_some() {-1.0} else {0.0}
+        })
+        .sum();
+
+    let won = match field.belongs_to().map(|m|m==mark) {
+        Some(true) => INFINITY,
+        Some(false) => NEG_INFINITY,
+        None => 0.0,
+    };
+
+    won + won_field + tactic_position * 0.3
 }
 
 pub static MAKE_MOVE: Selector<(FieldPosition, FieldPosition)> = Selector::new("de.ticktacktoe_ultimate.make_move");
@@ -52,7 +51,7 @@ pub fn best_move(field: LargeField, mark: Mark, next_field: Option<FieldPosition
     });
 }
 
-fn calc_move(field: LargeField, mark: Mark, next_field: Option<FieldPosition>, steps: u64) -> (FieldPosition, FieldPosition, Metrik) {
+fn calc_move(field: LargeField, mark: Mark, next_field: Option<FieldPosition>, steps: u64) -> (FieldPosition, FieldPosition, f32) {
         let iter = FieldPosition::all()
             .filter(|&pos|{
                 next_field.is_none() || next_field == Some(pos)
@@ -79,10 +78,10 @@ fn calc_move(field: LargeField, mark: Mark, next_field: Option<FieldPosition>, s
                 (outer, inner, r)
             });
     if steps % 2 == 0 {
-        iter.max_by(|v0, v1| v0.2.comp(&v1.2))
+        iter.max_by(|v0, v1| v0.2.partial_cmp(&v1.2).unwrap_or(Ordering::Equal))
             .unwrap()
     } else {
-        iter.min_by(|v0, v1| v0.2.comp(&v1.2))
+        iter.min_by(|v0, v1| v0.2.partial_cmp(&v1.2).unwrap_or(Ordering::Equal))
             .unwrap()
     }
 }
